@@ -121,7 +121,7 @@ def start_agent_subprocess(request: AgentStartRequest) -> tuple[subprocess.Popen
         "openscope_llm_agent",
         "--headless",
         "--mcp-url",
-        MCP_URL,
+        f"{MCP_URL}/mcp",
         "--cycles",
         str(request.cycles),
         "--timewarp",
