@@ -1,5 +1,20 @@
-.env
-logs/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
+*.egg-info/
+
+# Node
+node_modules/
+.svelte-kit/
+
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+
+# Build
+build/
+dist/

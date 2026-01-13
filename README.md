@@ -1,6 +1,6 @@
 # AI ATC Demo
 
-A Streamlit interface for live demonstrations of the AI ATC agent system.
+SvelteKit + FastAPI interface for live monitoring and session replay of the AI ATC agent system.
 
 ## Quick Start
 
@@ -8,59 +8,100 @@ A Streamlit interface for live demonstrations of the AI ATC agent system.
 # 1. Start OpenScope (required)
 cd ../openscope && npm start
 
-# 2. Start LLM server (optional - for critic mode)
+# 2. Start LLM server (required for agent)
 # Use LMStudio, vLLM, or Ollama at localhost:1234
 
-# 3. Start V-JEPA server (optional - for visual analysis)
-# cd ../vjepa-server && ./scripts/start_cluster.sh
-
-# 4. Run the demo
+# 3. Start the backend
 cd ai-atc-demo
-uv run streamlit run app.py
+uv run uvicorn backend.main:app --reload --port 8000
+
+# 4. Start the frontend (in another terminal)
+cd ai-atc-demo/frontend
+npm run dev
 ```
 
-Open http://localhost:8501 in your browser.
+Open http://localhost:5173 in your browser.
 
 ## Features
 
-- **Service Status Panel**: Shows health of OpenScope, LLM, and V-JEPA
-- **Live Radar View**: OpenScope embedded in an iframe (real-time)
-- **Agent Control**: Start/stop the agent with one click
-- **Decision Stream**: Live feed of agent commands and outcomes
+### Live Monitoring (`/live`)
+- **Service Status**: Health of OpenScope, MCP, LLM, V-JEPA
+- **Live Radar**: Screenshots from MCP server (2s polling)
+- **Agent Control**: Start/stop agent with timewarp setting
+- **Decision Stream**: Real-time feed of commands and outcomes
 - **Metrics Dashboard**: Landings, success rate, conflicts, score
+
+### Session Replay (`/replay/{id}`)
+- **Timeline**: Scrubable timeline with event markers (conflicts, ILS clearances)
+- **Playback Controls**: Play/pause, speed (0.5x-10x), seek
+- **Aircraft State**: Interpolated positions between snapshots
+- **Decision Log**: Commands synced to playback time
+- **Keyboard Shortcuts**: Space (play/pause), ←→ (seek), +− (speed)
+
+### Session Browser (`/sessions`)
+- List all past sessions with metadata
+- Filter by date, model, score
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         app.py (Streamlit)                       │
-│     [health checks]  [agent subprocess]  [JSONL reading]        │
+│                     SvelteKit Frontend (:5173)                   │
+│  ┌──────────────┐  ┌───────────────┐  ┌──────────────────────┐  │
+│  │ Session List │  │  Live Monitor │  │   Session Replay     │  │
+│  └──────────────┘  └───────────────┘  └──────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
-              │                      │
-              ▼                      ▼
-        HTTP checks          openscope-llm-agent (subprocess)
-              │                      │ (manages MCP via stdio)
-              ▼                      ▼
-   OpenScope:3003    LLM:1234    V-JEPA:8001
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     FastAPI Backend (:8000)                      │
+│  GET  /api/sessions              - List sessions                 │
+│  GET  /api/sessions/{id}/events  - Events for replay             │
+│  GET  /api/screenshot            - Proxy to MCP                  │
+│  GET  /api/health                - Service health                │
+│  POST /api/agent/start           - Start MCP + agent             │
+│  POST /api/agent/stop            - Stop agent                    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+          MCP:8080     Agent subprocess   JSONL logs
+              │               │
+              ▼               ▼
+       OpenScope:3003    LLM:1234
 ```
 
 ## Requirements
 
 - Python 3.10+
+- Node.js 18+
 - uv package manager
 - OpenScope running at localhost:3003
 - openscope-llm-agent in sibling directory
+- mcp-openscope in sibling directory
 
-## Troubleshooting
+## Development
 
-**OpenScope iframe not loading?**
-- Check that OpenScope is running: `curl localhost:3003`
-- Some browsers block iframes - try a different browser
+```bash
+# Backend
+uv sync
+uv run uvicorn backend.main:app --reload --port 8000
 
-**Agent not starting?**
-- Ensure openscope-llm-agent exists at `../openscope-llm-agent`
-- Check logs in `./logs/{session_id}/`
+# Frontend
+cd frontend
+npm install
+npm run dev
+```
 
-**Decisions not updating?**
-- Click the "Refresh" button to reload events
-- Check that the agent process is still running
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/sessions` | GET | List all sessions |
+| `/api/sessions/{id}` | GET | Session metadata |
+| `/api/sessions/{id}/events` | GET | All events for replay |
+| `/api/health` | GET | Service health checks |
+| `/api/screenshot` | GET | Proxy screenshot from MCP |
+| `/api/agent/start` | POST | Start MCP + agent |
+| `/api/agent/stop` | POST | Stop agent |
+| `/api/agent/status` | GET | Agent running status |
